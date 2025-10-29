@@ -9,6 +9,7 @@ export interface StudyTask {
   id: string;
   task: string;
   completed: boolean;
+  reminder?: string | null;
 }
 
 export interface StudyDay {

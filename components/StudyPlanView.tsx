@@ -1,12 +1,46 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import type { StudyPlan, StudyDay, StudyTask } from '../types';
-import { ChevronDownIcon, PlusIcon, SearchIcon, BrainIcon } from './icons';
+import { ChevronDownIcon, PlusIcon, SearchIcon, BrainIcon, BellIcon, CheckIcon } from './icons';
 
-const DayAccordion: React.FC<{ day: StudyDay; dayIndex: number; onTaskToggle: (dayIndex: number, taskId: string) => void }> = ({ day, dayIndex, onTaskToggle }) => {
+interface DayAccordionProps {
+    day: StudyDay;
+    dayIndex: number;
+    onTaskToggle: (dayIndex: number, taskId: string) => void;
+    onSetReminder: (dayIndex: number, taskId: string, reminder: string | null) => void;
+}
+
+
+const DayAccordion: React.FC<DayAccordionProps> = ({ day, dayIndex, onTaskToggle, onSetReminder }) => {
     const [isOpen, setIsOpen] = useState(day.day === 1);
+    const [openReminderMenu, setOpenReminderMenu] = useState<string | null>(null);
+    const menuRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (openReminderMenu && menuRefs.current[openReminderMenu] && !menuRefs.current[openReminderMenu]?.contains(event.target as Node)) {
+                setOpenReminderMenu(null);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [openReminderMenu]);
+    
     const completedTasks = day.tasks.filter(t => t.completed).length;
     const totalTasks = day.tasks.length;
     const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+    
+    const reminderOptions = [
+        { id: 'on-day', label: 'On the day' },
+        { id: '1-hour-before', label: '1 hour before' },
+        { id: '1-day-before', label: '1 day before' },
+    ];
+
+    const handleSetReminder = (taskId: string, reminder: string | null) => {
+        onSetReminder(dayIndex, taskId, reminder);
+        setOpenReminderMenu(null);
+    };
 
     return (
         <div className="bg-base-200 rounded-lg shadow-md overflow-hidden mb-3">
@@ -24,20 +58,51 @@ const DayAccordion: React.FC<{ day: StudyDay; dayIndex: number; onTaskToggle: (d
             </button>
             {isOpen && (
                 <div className="p-4 border-t border-base-300">
-                    <ul className="space-y-3">
+                    <ul className="space-y-2">
                         {day.tasks.map(task => (
-                            <li key={task.id}>
-                                <label className="flex items-center cursor-pointer w-full p-2 -m-2 rounded-lg transition-colors duration-200 hover:bg-base-300/50">
+                            <li key={task.id} className="flex items-center justify-between p-2 -m-2 rounded-lg group hover:bg-base-300/50">
+                                <label className="flex items-center cursor-pointer flex-grow min-w-0 mr-2">
                                     <input
                                         type="checkbox"
                                         checked={task.completed}
                                         onChange={() => onTaskToggle(dayIndex, task.id)}
                                         className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary shrink-0"
                                     />
-                                    <span className={`ml-3 transition-all duration-300 ease-in-out ${task.completed ? 'line-through text-base-content/50' : 'text-base-content'}`}>
+                                    <span className={`ml-3 transition-all duration-300 ease-in-out truncate ${task.completed ? 'line-through text-base-content/50' : 'text-base-content'}`}>
                                         {task.task}
                                     </span>
                                 </label>
+                                {/* Fix: Changed ref callback to have a block body, ensuring it returns void. */}
+                                <div className="relative shrink-0" ref={(el) => { menuRefs.current[task.id] = el; }}>
+                                     <button
+                                        onClick={() => setOpenReminderMenu(openReminderMenu === task.id ? null : task.id)}
+                                        className={`p-1 rounded-full ${task.reminder ? 'text-primary' : 'text-base-content/50'} hover:bg-base-100 ${task.reminder ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} focus:opacity-100 transition-opacity`}
+                                        aria-label="Set reminder"
+                                    >
+                                        <BellIcon className="w-5 h-5" />
+                                    </button>
+                                    {openReminderMenu === task.id && (
+                                        <div className="absolute right-0 mt-2 w-48 bg-base-100 rounded-md shadow-lg z-10 ring-1 ring-black ring-opacity-5 focus:outline-none py-1">
+                                            {reminderOptions.map(option => (
+                                                <button
+                                                    key={option.id}
+                                                    onClick={() => handleSetReminder(task.id, option.id)}
+                                                    className="w-full text-left px-4 py-2 text-sm text-base-content hover:bg-base-200 flex justify-between items-center"
+                                                >
+                                                    <span>{option.label}</span>
+                                                    {task.reminder === option.id && <CheckIcon className="w-4 h-4 text-primary" />}
+                                                </button>
+                                            ))}
+                                            <div className="border-t border-base-300 my-1"></div>
+                                            <button
+                                                onClick={() => handleSetReminder(task.id, null)}
+                                                className="w-full text-left px-4 py-2 text-sm text-error/80 hover:bg-base-200"
+                                            >
+                                                Clear reminder
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             </li>
                         ))}
                     </ul>
@@ -97,6 +162,25 @@ const StudyPlanView: React.FC<StudyPlanViewProps> = ({ plans, updatePlan, onNavi
     updatePlan(updatedPlan);
   };
   
+  const handleSetTaskReminder = (dayIndex: number, taskId: string, reminder: string | null) => {
+    if (!activePlan) return;
+
+    const updatedDays = activePlan.days.map((day, index) => {
+        if (index === dayIndex) {
+            return {
+                ...day,
+                tasks: day.tasks.map(task =>
+                    task.id === taskId ? { ...task, reminder } : task
+                ),
+            };
+        }
+        return day;
+    });
+
+    const updatedPlan = { ...activePlan, days: updatedDays };
+    updatePlan(updatedPlan);
+};
+
   if (plans.length === 0) {
       return (
           <div className="p-4 sm:p-6 md:p-8 flex flex-col items-center justify-center h-full text-center">
@@ -178,7 +262,7 @@ const StudyPlanView: React.FC<StudyPlanViewProps> = ({ plans, updatePlan, onNavi
                             </div>
 
                             {activePlan.days.map((day, index) => (
-                                <DayAccordion key={day.day} day={day} dayIndex={index} onTaskToggle={handleTaskToggle} />
+                                <DayAccordion key={day.day} day={day} dayIndex={index} onTaskToggle={handleTaskToggle} onSetReminder={handleSetTaskReminder} />
                             ))}
                         </div>
                     ) : (

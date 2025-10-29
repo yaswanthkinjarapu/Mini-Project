@@ -1,5 +1,4 @@
 import React from 'react';
-// Fix: 'Page' cannot be used as a value because it was imported using 'import type'.
 import { Page, type User, type StudyPlan } from '../types';
 import ProgressTracker from './ProgressTracker';
 import { PlannerIcon, BrainIcon, AssistantIcon, PlusIcon } from './icons';

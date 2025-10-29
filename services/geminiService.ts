@@ -1,5 +1,5 @@
-// Fix: The 'Part' type is part of the '@google/genai' SDK and should be imported from there.
-import { GoogleGenAI, Type, type Part } from "@google/genai";
+
+import { GoogleGenAI, Type, Part } from "@google/genai";
 import type { StudyPlan, QuizQuestion, StudyDay } from '../types';
 
 const API_KEY = process.env.API_KEY;
